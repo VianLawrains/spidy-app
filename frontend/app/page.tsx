@@ -11,6 +11,7 @@ import { NewsFeed } from '../components/NewsFeed';
 import { ProfileModal } from '../components/ProfileModal';
 import { OpeningWebAnimation } from '../components/OpeningWebAnimation';
 import StartupScreen from '../components/StartupScreen';
+import { CreatedByVian } from '../components/CreatedByVian';
 import { SunflowerMusicPlayerRef } from '../components/SunflowerMusicPlayer';
 import {
   sendMessageApi,
@@ -162,6 +163,9 @@ export default function Dashboard() {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-spidy-dark text-white relative">
+      {/* Startup Brand Badge: Created by Vian */}
+      <CreatedByVian />
+
       {/* Spidy AI Startup Screen Overlay - Shows on every load/refresh */}
       {showStartupScreen && (
         <StartupScreen onComplete={() => setShowStartupScreen(false)} />

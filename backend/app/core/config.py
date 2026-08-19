@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""
+    HF_TOKEN: str = ""
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     
     # Storage
