@@ -38,15 +38,17 @@ class LLMRouter:
         return ""
 
     def _get_gemini_client(self, api_key: str):
+        """Lazy-initialize and cache Google GenAI client with a 12-second HTTP timeout"""
         from google import genai
         from google.genai import types
-        if api_key not in self._gemini_client_cache:
-            # Configure 12-second HTTP timeout to prevent 112s tenacity retry hangs on temporary 503 spikes
-            self._gemini_client_cache[api_key] = genai.Client(
-                api_key=api_key,
+
+        clean_key = api_key.strip()
+        if clean_key not in self._gemini_client_cache:
+            self._gemini_client_cache[clean_key] = genai.Client(
+                api_key=clean_key,
                 http_options=types.HttpOptions(timeout=12000)
             )
-        return self._gemini_client_cache[api_key]
+        return self._gemini_client_cache[clean_key]
 
     async def generate_response(
         self,
@@ -55,19 +57,19 @@ class LLMRouter:
         system_extra: str = "",
         memory_context: str = ""
     ) -> str:
-        """Real LLM response generator calling Google GenAI (gemini-3.6-flash), OpenAI, Claude, or Ollama"""
+        """Main LLM response generator routing to Google GenAI, OpenAI, Claude, or Ollama"""
         
         full_system_prompt = f"{SPIDY_SYSTEM_PROMPT}\n{system_extra}\n{memory_context}".strip()
         model_name = (model or "").lower().strip()
         user_prompt = messages[-1]["content"] if messages else ""
 
-        # 1. Check Gemini Provider (Default and Primary)
+        # 1. Gemini Provider (Default and Primary)
         if "gemini" in model_name or not model_name or any(ver in model_name for ver in ["1.5", "2.5", "2.0", "flash", "pro"]):
             gemini_key = self.get_api_key("gemini")
             key_detected = bool(gemini_key and len(gemini_key.strip()) > 5)
 
             logger.info("=== [LLM Request Pipeline Audit] ===")
-            logger.info(f"-> Selected Provider: Google GenAI SDK")
+            logger.info("-> Selected Provider: Google GenAI SDK")
             logger.info(f"-> Active Model: {ACTIVE_GEMINI_MODEL}")
             logger.info(f"-> API Key Detected: {key_detected}")
 
@@ -85,7 +87,7 @@ class LLMRouter:
                 logger.error(f"{err_detail}\n{traceback.format_exc()}")
                 return f"I apologize, but I encountered a temporary issue reaching the Gemini AI service ({str(e)}). Please try sending your message again."
 
-        # 2. Check OpenAI Provider
+        # 2. OpenAI Provider
         if "gpt" in model_name or "openai" in model_name:
             openai_key = self.get_api_key("openai")
             if not openai_key:
@@ -95,7 +97,7 @@ class LLMRouter:
             except Exception as e:
                 return f"❌ [OpenAI API Exception]: {str(e)}"
 
-        # 3. Check Anthropic Claude Provider
+        # 3. Anthropic Claude Provider
         if "claude" in model_name:
             claude_key = self.get_api_key("claude")
             if not claude_key:
@@ -105,14 +107,14 @@ class LLMRouter:
             except Exception as e:
                 return f"❌ [Claude API Exception]: {str(e)}"
 
-        # 4. Check Ollama Local Provider
+        # 4. Ollama Local Provider
         if "ollama" in model_name:
             try:
                 return await self._call_ollama(messages, full_system_prompt)
             except Exception as e:
                 return f"❌ [Ollama Local API Error]: {str(e)}"
 
-        # Default Fallback to Gemini
+        # Fallback to Gemini
         gemini_key = self.get_api_key("gemini")
         if gemini_key:
             return await self._call_gemini_genai_sdk(messages, full_system_prompt, gemini_key.strip())
