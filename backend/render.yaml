@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: spidy-backend
+    env: python
+    region: oregon
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn -w 2 -k uvicorn.workers.UvicornWorker app.main:app --bind 0.0.0.0:$PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.8
+      - key: ENVIRONMENT
+        value: production

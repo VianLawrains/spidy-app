@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: spidy-backend
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - DATABASE_URL=postgresql://spidy_user:spidy_password@postgres:5432/spidy_db
+      - REDIS_URL=redis://redis:6379/0
+      - JWT_SECRET=spidy_super_secret_jwt_key_2026_change_in_production
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./backend/app/uploads:/app/app/uploads
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: spidy-frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: spidy-postgres
+    restart: always
+    environment:
+      - POSTGRES_USER=spidy_user
+      - POSTGRES_PASSWORD=spidy_password
+      - POSTGRES_DB=spidy_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: spidy-redis
+    restart: always
+    ports:
+      - "6379:6379"
+
+volumes:
+  postgres_data:

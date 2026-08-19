@@ -1,0 +1,108 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-inter: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+body {
+  font-family: var(--font-inter);
+  background-color: #0b0c10;
+  color: #e0e6ed;
+  overflow-x: hidden;
+}
+
+/* Custom Spidy AI Futuristic Dark Theme & Web Backgrounds */
+.glass-panel {
+  background: rgba(18, 20, 28, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(230, 57, 70, 0.15);
+}
+
+.glass-card {
+  background: rgba(26, 29, 41, 0.65);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-input {
+  background: rgba(12, 14, 22, 0.85);
+  border: 1px solid rgba(230, 57, 70, 0.25);
+  color: #f1f5f9;
+}
+.glass-input:focus {
+  border-color: #e63946;
+  box-shadow: 0 0 15px rgba(230, 57, 70, 0.35);
+}
+
+.spidy-gradient-text {
+  background: linear-gradient(135deg, #ffffff 0%, #e63946 50%, #d62828 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.spidy-btn-primary {
+  background: linear-gradient(135deg, #e63946 0%, #b71c1c 100%);
+  box-shadow: 0 4px 20px rgba(230, 57, 70, 0.4);
+  transition: all 0.2s ease-in-out;
+}
+.spidy-btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 24px rgba(230, 57, 70, 0.6);
+}
+
+/* Professional Futuristic Glowing Web Background Lines */
+.bg-spider-grid {
+  background-image: 
+    radial-gradient(circle at 50% 50%, rgba(230, 57, 70, 0.06) 0%, transparent 60%),
+    linear-gradient(to right, rgba(230, 57, 70, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(230, 57, 70, 0.04) 1px, transparent 1px);
+  background-size: 100% 100%, 48px 48px, 48px 48px;
+  animation: webGridFloat 40s linear infinite;
+}
+
+@keyframes webGridFloat {
+  0% { background-position: 0 0, 0 0, 0 0; }
+  100% { background-position: 0 0, 48px 48px, 48px 48px; }
+}
+
+/* Moving Web Glow Lines */
+.web-line {
+  position: absolute;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(230, 57, 70, 0.25), transparent);
+  height: 1px;
+  width: 100%;
+  animation: webScan 8s ease-in-out infinite alternate;
+}
+
+@keyframes webScan {
+  0% { transform: translateY(-100%); opacity: 0.2; }
+  50% { opacity: 0.6; }
+  100% { transform: translateY(100%); opacity: 0.2; }
+}
+
+/* Scrollbar Customization */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0b0c10;
+}
+::-webkit-scrollbar-thumb {
+  background: #1f2430;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #e63946;
+}
+
+/* Reduced Motion Override */
+@media (prefers-reduced-motion: reduce) {
+  .bg-spider-grid, .web-line {
+    animation: none !important;
+  }
+}

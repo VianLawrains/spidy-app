@@ -1,0 +1,44 @@
+# Environment Files & Secrets (NEVER COMMIT)
+.env
+.env.*
+*.env
+backend/.env
+frontend/.env
+frontend/.env.local
+frontend/.env.production
+
+# Local Databases & Media
+*.db
+*.sqlite
+*.sqlite3
+spidy.db
+backend/spidy.db
+uploads/
+backend/uploads/
+.chroma/
+
+# Node.js & Next.js
+node_modules/
+frontend/node_modules/
+.next/
+frontend/.next/
+out/
+build/
+dist/
+
+# Python Cache & Virtual Environments
+__pycache__/
+backend/__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+*.log
+
+# IDE & Operating System Files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
