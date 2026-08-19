@@ -26,21 +26,26 @@ app = FastAPI(
 
 # Parse Production CORS Origins
 cors_origins_env = os.getenv("CORS_ORIGINS", "").strip()
-allowed_origins = [origin.strip() for origin in cors_origins_env.split(",") if origin.strip()]
+allowed_origins = [origin.strip() for origin in cors_origins_env.split(",") if origin.strip() and origin.strip() != "*"]
 
-# Default local development & production fallback origins if CORS_ORIGINS is not set
-if not allowed_origins:
-    allowed_origins = [
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:8000",
-        "http://127.0.0.1:8000",
-        "*"
-    ]
+# Explicit Production & Local Allowed Origins
+default_origins = [
+    "https://spidy-app-phi.vercel.app",
+    "https://spidy-app.vercel.app",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+]
+
+for d_origin in default_origins:
+    if d_origin not in allowed_origins:
+        allowed_origins.append(d_origin)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

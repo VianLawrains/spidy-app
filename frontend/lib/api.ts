@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-// Default to http://127.0.0.1:8000 for IPv4 network reliability across Windows & Next.js
+// Default to http://127.0.0.1:8000 for local dev or process.env.NEXT_PUBLIC_API_URL for production
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
 
 export const api = axios.create({
@@ -25,7 +25,7 @@ api.interceptors.response.use(
   (error) => {
     // Only flag true network disconnections where no HTTP response was received
     if ((error.code === 'ERR_NETWORK' || !error.response) && !error.message?.includes('http')) {
-      error.message = `Unable to connect to Spidy backend server at ${API_BASE}. Please ensure FastAPI is running on port 8000.`;
+      error.message = `Unable to connect to Spidy backend server at ${API_BASE}. Please verify server availability and network connectivity.`;
     }
     return Promise.reject(error);
   }
