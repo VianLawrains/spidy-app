@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Image as ImageIcon, Sparkles, Download, Layers, ShieldAlert, Check } from 'lucide-react';
+import React, { useState } from 'react';
+import { Image as ImageIcon, Sparkles, Download, Layers, ShieldAlert, Check, RefreshCw } from 'lucide-react';
 import { generateImageApi } from '../lib/api';
 
 export const ImageStudio: React.FC = () => {
@@ -41,7 +41,7 @@ export const ImageStudio: React.FC = () => {
             Spidy Image Generation Studio
           </h1>
           <p className="text-xs md:text-sm text-gray-400">
-            Generate high-resolution visual assets using Google GenAI / Pillow image synthesis.
+            Generate high-resolution visual assets using Google GenAI & FLUX AI image synthesis.
           </p>
         </div>
       </div>
@@ -70,9 +70,11 @@ export const ImageStudio: React.FC = () => {
               onChange={(e) => setAspectRatio(e.target.value)}
               className="w-full glass-input p-2.5 rounded-xl text-xs text-white focus:outline-none cursor-pointer"
             >
-              <option value="1:1">1:1 Square (512x512)</option>
-              <option value="16:9">16:9 Widescreen (1024x576)</option>
-              <option value="4:3">4:3 Standard (800x600)</option>
+              <option value="1:1">1:1 Square (1024x1024)</option>
+              <option value="16:9">16:9 Widescreen (1280x720)</option>
+              <option value="9:16">9:16 Portrait (720x1280)</option>
+              <option value="4:3">4:3 Standard (1024x768)</option>
+              <option value="3:4">3:4 Portrait (768x1024)</option>
             </select>
           </div>
 
@@ -89,7 +91,7 @@ export const ImageStudio: React.FC = () => {
           <div className="p-3 rounded-xl bg-spidy-surface/50 border border-spidy-border text-[11px] text-gray-400 flex items-start gap-2">
             <Layers className="w-4 h-4 text-spidy-crimson shrink-0 mt-0.5" />
             <span>
-              <strong>Image Editing Notice:</strong> Multi-layer canvas image editing is currently unavailable. Single-prompt asset synthesis is active.
+              <strong>Image Studio Engine:</strong> FLUX.1 high-definition image generation active. Multi-aspect ratio synthesis enabled.
             </span>
           </div>
         </div>
@@ -109,18 +111,35 @@ export const ImageStudio: React.FC = () => {
           )}
 
           <div className="w-full flex-1 flex items-center justify-center my-4">
-            {imageUrl ? (
-              <div className="relative group rounded-xl overflow-hidden border border-spidy-border shadow-2xl max-h-80">
-                <img src={imageUrl} alt="Generated" className="w-full h-full object-cover" />
-                <a
-                  href={imageUrl}
-                  download="spidy_generated_asset.png"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="absolute bottom-3 right-3 px-3 py-1.5 bg-spidy-red text-white text-xs rounded-lg shadow-lg flex items-center gap-1.5 opacity-90 group-hover:opacity-100 transition-opacity"
-                >
-                  <Download className="w-3.5 h-3.5" /> Save Asset
-                </a>
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-20 text-spidy-crimson space-y-3">
+                <RefreshCw className="w-8 h-8 animate-spin" />
+                <span className="text-xs font-semibold text-gray-300">Synthesizing high-definition image...</span>
+              </div>
+            ) : imageUrl ? (
+              <div className="relative group rounded-xl overflow-hidden border border-spidy-border shadow-2xl max-h-80 w-full flex items-center justify-center bg-black/40">
+                <img src={imageUrl} alt="Generated Asset" className="max-h-80 w-auto object-contain rounded-xl" />
+                <div className="absolute bottom-3 right-3 flex items-center gap-2 opacity-90 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={handleGenerate}
+                    disabled={loading}
+                    className="px-3 py-1.5 bg-spidy-surface/90 hover:bg-spidy-surface text-white text-xs rounded-lg shadow-lg border border-spidy-border flex items-center gap-1.5 cursor-pointer backdrop-blur-md"
+                    title="Regenerate image with a new random seed"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                    <span>Regenerate</span>
+                  </button>
+
+                  <a
+                    href={imageUrl}
+                    download="spidy_generated_asset.jpg"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3 py-1.5 bg-spidy-red hover:bg-spidy-crimson text-white text-xs rounded-lg shadow-lg flex items-center gap-1.5 cursor-pointer backdrop-blur-md"
+                  >
+                    <Download className="w-3.5 h-3.5" /> Save Asset
+                  </a>
+                </div>
               </div>
             ) : (
               <div className="text-gray-500 text-xs italic py-20">

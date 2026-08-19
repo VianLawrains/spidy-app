@@ -82,6 +82,13 @@ class LLMRouter:
                 logger.info(f"-> Gemini Response Received ({len(response)} chars)")
                 return response
             except Exception as e:
+                err_str = str(e).lower()
+                # Detect 429 Quota Exhaustion separately without exposure
+                if "429" in err_str or "resource_exhausted" in err_str or "quota" in err_str:
+                    user_msg = "⚠️ The Gemini AI service quota limit has been reached for free tier requests. Please wait a moment and try sending your message again."
+                    logger.warning(f"[Gemini Quota Exceeded]: {e}")
+                    return user_msg
+
                 err_detail = f"❌ [Gemini API Error]: {str(e)}"
                 logger.error(f"{err_detail}\n{traceback.format_exc()}")
                 return f"I apologize, but I encountered a temporary issue reaching the Gemini AI service ({str(e)}). Please try sending your message again."
@@ -132,7 +139,7 @@ class LLMRouter:
             yield chunk
 
     def _sync_gemini_call(self, user_prompt: str, system_prompt: str, api_key: str) -> str:
-        """Synchronous worker function to run in thread pool with controlled 1-retry fallback"""
+        """Synchronous worker function to run in thread pool with controlled 1-retry fallback for 503/504"""
         from google.genai import types
         
         client = self._get_gemini_client(api_key)
@@ -151,6 +158,10 @@ class LLMRouter:
                     return res.text
             except Exception as e:
                 err_str = str(e).lower()
+                # DO NOT retry 429 quota exhaustion errors!
+                if "429" in err_str or "resource_exhausted" in err_str or "quota" in err_str:
+                    raise e
+
                 is_transient = "504" in err_str or "503" in err_str or "deadline" in err_str or "unavailable" in err_str
                 if is_transient and attempt < max_attempts:
                     logger.warning(f"[Gemini Retry] Attempt {attempt} failed ({e}), retrying once after 1s pause...")

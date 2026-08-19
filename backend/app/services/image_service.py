@@ -20,8 +20,8 @@ class ImageService:
         }
 
     async def generate_image(self, prompt: str, aspect_ratio: str = "1:1") -> str:
-        """High-Definition AI Image Generation using FLUX.1 model with randomized seed"""
-        clean_prompt = prompt.strip() if prompt else "Futuristic Spidy AI superhero cityscape"
+        """High-Definition AI Image Generation using FLUX.1 model preserving accurate user prompts"""
+        clean_prompt = prompt.strip() if prompt else "A superhero artificial intelligence logo"
         encoded_prompt = urllib.parse.quote(clean_prompt)
         seed = random.randint(100000, 999999)
         
@@ -36,8 +36,8 @@ class ImageService:
         elif aspect_ratio == "3:4":
             width, height = 768, 1024
 
-        # Premium FLUX.1 model endpoint with seed and enhancement
-        image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={width}&height={height}&model=flux&seed={seed}&nologo=true&enhance=true"
+        # Clean FLUX.1 endpoint preserving exact prompt intent without mangling
+        image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={width}&height={height}&model=flux&seed={seed}&nologo=true"
         return image_url
 
     def _perform_ocr(self, file_path: str) -> str:
