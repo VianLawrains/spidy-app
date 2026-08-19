@@ -138,8 +138,9 @@ class LLMRouter:
         from google.genai import types
         
         client = self._get_gemini_client(api_key)
+        max_attempts = 2
 
-        for attempt in range(1, 3):
+        for attempt in range(1, max_attempts + 1):
             try:
                 res = client.models.generate_content(
                     model=ACTIVE_GEMINI_MODEL,
@@ -153,7 +154,7 @@ class LLMRouter:
             except Exception as e:
                 err_str = str(e).lower()
                 is_transient = "504" in err_str or "503" in err_str or "deadline" in err_str or "unavailable" in err_str
-                if is_transient and attempt < 2:
+                if is_transient and attempt < max_attempts:
                     logger.warning(f"[Gemini Retry] Attempt {attempt} failed ({e}), retrying once after 1s pause...")
                     time.sleep(1.0)
                     continue
