@@ -85,7 +85,7 @@ class LLMRouter:
                 err_str = str(e).lower()
                 # Detect 429 Quota Exhaustion separately without exposure
                 if "429" in err_str or "resource_exhausted" in err_str or "quota" in err_str:
-                    user_msg = "⚠️ The Gemini AI service quota limit has been reached for free tier requests. Please wait a moment and try sending your message again."
+                    user_msg = "Spidy AI's Gemini API quota is temporarily unavailable. Please try again later."
                     logger.warning(f"[Gemini Quota Exceeded]: {e}")
                     return user_msg
 

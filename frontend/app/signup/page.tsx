@@ -1,13 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Eye, EyeOff, AlertCircle, ArrowRight, ShieldCheck } from 'lucide-react';
 import { registerApi } from '../../lib/api';
 
-export default function SignupPage() {
+function SignupContent() {
   const router = useRouter();
   
   // CRITICAL REQUIREMENT: Initial form inputs MUST be empty string ""
@@ -76,7 +76,7 @@ export default function SignupPage() {
         full_name: cleanName,
       });
 
-      if (res.status === 'success' || res.detail) {
+      if (res.status === 'pending_verification' || res.status === 'success' || res.detail) {
         // Store email for OTP verification step
         localStorage.setItem('spidy_pending_verify_email', cleanEmail);
         router.push('/verify-email');
@@ -87,6 +87,11 @@ export default function SignupPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleGoogleLogin = () => {
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'https://spidy-app.onrender.com';
+    window.location.href = `${apiBase}/api/v1/auth/google/login`;
   };
 
   return (
@@ -284,7 +289,8 @@ export default function SignupPage() {
         {/* Continue with Google */}
         <button
           type="button"
-          className="w-full py-2.5 rounded-xl bg-spidy-surface border border-spidy-border hover:border-gray-500 text-xs text-gray-200 font-semibold flex items-center justify-center gap-2 transition-all"
+          onClick={handleGoogleLogin}
+          className="w-full py-2.5 rounded-xl bg-spidy-surface border border-spidy-border hover:border-gray-500 text-xs text-gray-200 font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer"
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24">
             <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.7 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.3 9 5 12 5z" />
@@ -304,5 +310,13 @@ export default function SignupPage() {
         </div>
       </motion.div>
     </div>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#07080b]" />}>
+      <SignupContent />
+    </Suspense>
   );
 }

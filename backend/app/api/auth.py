@@ -1,9 +1,11 @@
 import os
 import shutil
 import secrets
+import httpx
 from datetime import datetime, timedelta
 from typing import Optional, Any, Dict
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Request, Response
+from fastapi.responses import RedirectResponse
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -42,12 +44,27 @@ from fastapi.security import OAuth2PasswordBearer
 router = APIRouter(tags=["Authentication & Users"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 
-async def get_current_user(token: Optional[str] = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)) -> User:
-    """Strict authenticated user requirement"""
-    if not token:
+def extract_token_from_request(request: Request, bearer_token: Optional[str] = None) -> Optional[str]:
+    """Safely extract token from Authorization header or HttpOnly Cookie"""
+    if bearer_token and bearer_token.strip():
+        return bearer_token.strip()
+    if request and hasattr(request, "cookies"):
+        cookie_val = request.cookies.get("spidy_token")
+        if cookie_val and cookie_val.strip():
+            return cookie_val.strip()
+    return None
+
+async def get_current_user(
+    request: Request,
+    token: Optional[str] = Depends(oauth2_scheme),
+    db: AsyncSession = Depends(get_db)
+) -> User:
+    """Strict authenticated user requirement supporting both Bearer header and HttpOnly cookie"""
+    auth_token = extract_token_from_request(request, token)
+    if not auth_token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated. Please log in.")
     
-    payload = decode_token(token)
+    payload = decode_token(auth_token)
     if not payload or "sub" not in payload or payload.get("type") != "access":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired access token")
     
@@ -58,10 +75,15 @@ async def get_current_user(token: Optional[str] = Depends(oauth2_scheme), db: As
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User account is inactive or not found")
     return user
 
-async def get_current_user_optional(token: Optional[str] = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)) -> User:
+async def get_current_user_optional(
+    request: Request,
+    token: Optional[str] = Depends(oauth2_scheme),
+    db: AsyncSession = Depends(get_db)
+) -> User:
     """Optional user authentication: returns authenticated user or guest user"""
-    if token:
-        payload = decode_token(token)
+    auth_token = extract_token_from_request(request, token)
+    if auth_token:
+        payload = decode_token(auth_token)
         if payload and "sub" in payload and payload.get("type") == "access":
             user_id = payload["sub"]
             result = await db.execute(select(User).where(User.id == user_id))
@@ -321,7 +343,7 @@ async def resend_otp(req: ResendOTPRequest, db: AsyncSession = Depends(get_db)):
 # 4. LOCAL LOGIN
 # ==========================================
 @router.post("/auth/login", response_model=TokenOut)
-async def login(user_in: UserLogin, db: AsyncSession = Depends(get_db)):
+async def login(user_in: UserLogin, response: Response, db: AsyncSession = Depends(get_db)):
     clean_email = normalize_email(user_in.email)
 
     result = await db.execute(select(User).where(func.lower(User.email) == clean_email))
@@ -364,6 +386,16 @@ async def login(user_in: UserLogin, db: AsyncSession = Depends(get_db)):
     db.add(RefreshToken(user_id=user.id, token_hash=hash_otp(refresh_token), expires_at=ref_expires))
     await db.commit()
 
+    # Set HttpOnly Cookie for secure session storage without query param leaks
+    response.set_cookie(
+        key="spidy_token",
+        value=access_token,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        max_age=604800
+    )
+
     print(f"[SPIDY AUTH SUCCESS] User logged in successfully: {clean_email}")
 
     return TokenOut(
@@ -374,21 +406,157 @@ async def login(user_in: UserLogin, db: AsyncSession = Depends(get_db)):
     )
 
 # ==========================================
-# 5. CURRENT USER (/me)
+# 5. GOOGLE OAUTH AUTHORIZATION FLOW
+# ==========================================
+@router.get("/auth/google/login")
+async def google_login():
+    """Initiates Google OAuth 2.0 Authorization Code Flow"""
+    client_id = (os.getenv("GOOGLE_CLIENT_ID") or getattr(settings, "GOOGLE_CLIENT_ID", "")).strip()
+    redirect_uri = (os.getenv("GOOGLE_REDIRECT_URI") or getattr(settings, "GOOGLE_REDIRECT_URI", "https://spidy-app.onrender.com/api/v1/auth/google/callback")).strip()
+    
+    if not client_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Google OAuth is not configured on server environment (missing GOOGLE_CLIENT_ID)."
+        )
+    
+    scope = "openid email profile"
+    auth_url = (
+        f"https://accounts.google.com/o/oauth2/v2/auth?"
+        f"response_type=code&client_id={client_id}&redirect_uri={redirect_uri}&"
+        f"scope={scope}&access_type=offline&prompt=select_account"
+    )
+    return RedirectResponse(auth_url)
+
+@router.get("/auth/google/callback")
+async def google_callback(code: Optional[str] = None, error: Optional[str] = None, db: AsyncSession = Depends(get_db)):
+    """Handles Google OAuth Token Exchange and Secure Cookie Session Creation"""
+    frontend_url = (os.getenv("FRONTEND_URL") or getattr(settings, "FRONTEND_URL", "https://spidy-app-phi.vercel.app")).strip()
+
+    if error or not code:
+        print(f"[GOOGLE OAUTH ERROR]: OAuth flow cancelled or error returned: {error}")
+        return RedirectResponse(f"{frontend_url}/login?error=Google+login+cancelled")
+
+    client_id = (os.getenv("GOOGLE_CLIENT_ID") or getattr(settings, "GOOGLE_CLIENT_ID", "")).strip()
+    client_secret = (os.getenv("GOOGLE_CLIENT_SECRET") or getattr(settings, "GOOGLE_CLIENT_SECRET", "")).strip()
+    redirect_uri = (os.getenv("GOOGLE_REDIRECT_URI") or getattr(settings, "GOOGLE_REDIRECT_URI", "https://spidy-app.onrender.com/api/v1/auth/google/callback")).strip()
+
+    # 1. Exchange authorization code for tokens securely on backend
+    token_url = "https://oauth2.googleapis.com/token"
+    token_data = {
+        "code": code,
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "redirect_uri": redirect_uri,
+        "grant_type": "authorization_code"
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            res = await client.post(token_url, data=token_data)
+            if res.status_code != 200:
+                print(f"[GOOGLE OAUTH ERROR]: Token exchange failed status {res.status_code}: {res.text[:200]}")
+                return RedirectResponse(f"{frontend_url}/login?error=Google+token+exchange+failed")
+            
+            tokens = res.json()
+            access_token = tokens.get("access_token")
+
+            # 2. Fetch Google user profile
+            userinfo_res = await client.get(
+                "https://www.googleapis.com/oauth2/v2/userinfo",
+                headers={"Authorization": f"Bearer {access_token}"}
+            )
+            if userinfo_res.status_code != 200:
+                print(f"[GOOGLE OAUTH ERROR]: User profile fetch failed: {userinfo_res.text[:200]}")
+                return RedirectResponse(f"{frontend_url}/login?error=Google+user+profile+failed")
+
+            google_user = userinfo_res.json()
+            raw_email = google_user.get("email")
+            if not raw_email:
+                return RedirectResponse(f"{frontend_url}/login?error=Google+account+has+no+email")
+
+            clean_email = normalize_email(raw_email)
+            full_name = google_user.get("name") or clean_email.split("@")[0]
+            picture = google_user.get("picture") or "/images.jpg"
+
+            # 3. Find or Create Spidy User
+            result = await db.execute(select(User).where(func.lower(User.email) == clean_email))
+            user = result.scalars().first()
+
+            if not user:
+                auto_username = f"google_{clean_email.split('@')[0]}_{secrets.token_hex(2)}"
+                user = User(
+                    email=clean_email,
+                    username=auto_username,
+                    hashed_password="",
+                    full_name=full_name,
+                    avatar_url=picture,
+                    is_verified=True,
+                    is_active=True
+                )
+                db.add(user)
+                await db.flush()
+
+                profile = Profile(user_id=user.id)
+                db.add(profile)
+                await db.commit()
+                await db.refresh(user)
+            else:
+                if not user.is_verified:
+                    user.is_verified = True
+                    await db.commit()
+
+            # 4. Issue Spidy JWT Session securely via HttpOnly Cookies to prevent token URL leaks
+            spidy_access_token = create_access_token(user.id)
+            spidy_refresh_token, ref_expires = create_refresh_token(user.id)
+
+            db.add(RefreshToken(user_id=user.id, token_hash=hash_otp(spidy_refresh_token), expires_at=ref_expires))
+            await db.commit()
+
+            print(f"[GOOGLE OAUTH SUCCESS]: User logged in via Google: {clean_email}")
+            
+            # Secure Redirect: Set HttpOnly cookies and redirect to dashboard (tokens never exposed in URL query string)
+            redirect_resp = RedirectResponse(f"{frontend_url}/?login=success", status_code=status.HTTP_302_FOUND)
+            redirect_resp.set_cookie(
+                key="spidy_token",
+                value=spidy_access_token,
+                httponly=True,
+                secure=True,
+                samesite="lax",
+                max_age=604800
+            )
+            redirect_resp.set_cookie(
+                key="spidy_refresh_token",
+                value=spidy_refresh_token,
+                httponly=True,
+                secure=True,
+                samesite="lax",
+                max_age=2592000
+            )
+            return redirect_resp
+
+    except Exception as e:
+        print(f"[GOOGLE OAUTH EXCEPTION]: {e}")
+        return RedirectResponse(f"{frontend_url}/login?error=Google+login+exception")
+
+# ==========================================
+# 6. CURRENT USER (/me)
 # ==========================================
 @router.get("/auth/me", response_model=UserOut)
 async def get_me(current_user: User = Depends(get_current_user)):
     return UserOut.model_validate(current_user)
 
 # ==========================================
-# 6. LOGOUT
+# 7. LOGOUT
 # ==========================================
 @router.post("/auth/logout")
-async def logout(current_user: User = Depends(get_current_user_optional)):
+async def logout(response: Response, current_user: User = Depends(get_current_user_optional)):
+    response.delete_cookie("spidy_token")
+    response.delete_cookie("spidy_refresh_token")
     return {"status": "success", "message": "Logged out successfully."}
 
 # ==========================================
-# 7. PROFILE GET & UPDATE
+# 8. PROFILE GET & UPDATE
 # ==========================================
 @router.get("/profile", response_model=ProfileOut)
 @router.get("/auth/profile", response_model=ProfileOut)

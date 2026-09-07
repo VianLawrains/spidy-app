@@ -21,6 +21,12 @@ class Settings(BaseSettings):
     SMTP_FROM: str = ""
     SMTP_FROM_EMAIL: str = ""
 
+    # Google OAuth Credentials
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_REDIRECT_URI: str = "https://spidy-app.onrender.com/api/v1/auth/google/callback"
+    FRONTEND_URL: str = "https://spidy-app-phi.vercel.app"
+
     # SMS / Twilio Provider
     TWILIO_ACCOUNT_SID: str = ""
     TWILIO_AUTH_TOKEN: str = ""

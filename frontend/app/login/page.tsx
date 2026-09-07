@@ -1,14 +1,16 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Eye, EyeOff, AlertCircle, ArrowRight } from 'lucide-react';
 import { loginApi } from '../../lib/api';
 
-export default function LoginPage() {
+function LoginContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+
   // CRITICAL REQUIREMENT: Initial email input MUST be empty string ""
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -17,6 +19,23 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [shake, setShake] = useState(false);
+
+  // Check for Google OAuth query parameters on redirect
+  useEffect(() => {
+    const token = searchParams.get('token');
+    const refreshToken = searchParams.get('refresh_token');
+    const oauthError = searchParams.get('error');
+
+    if (token) {
+      localStorage.setItem('spidy_token', token);
+      if (refreshToken) {
+        localStorage.setItem('spidy_refresh_token', refreshToken);
+      }
+      router.push('/');
+    } else if (oauthError) {
+      setError(`Google Login Error: ${oauthError.replace(/\+/g, ' ')}`);
+    }
+  }, [searchParams, router]);
 
   const triggerErrorShake = (msg: string) => {
     setError(msg);
@@ -50,6 +69,11 @@ export default function LoginPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleGoogleLogin = () => {
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'https://spidy-app.onrender.com';
+    window.location.href = `${apiBase}/api/v1/auth/google/login`;
   };
 
   return (
@@ -189,7 +213,8 @@ export default function LoginPage() {
         {/* Continue with Google */}
         <button
           type="button"
-          className="w-full py-2.5 rounded-xl bg-spidy-surface border border-spidy-border hover:border-gray-500 text-xs text-gray-200 font-semibold flex items-center justify-center gap-2 transition-all"
+          onClick={handleGoogleLogin}
+          className="w-full py-2.5 rounded-xl bg-spidy-surface border border-spidy-border hover:border-gray-500 text-xs text-gray-200 font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer"
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24">
             <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.7 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.3 9 5 12 5z" />
@@ -209,5 +234,13 @@ export default function LoginPage() {
         </div>
       </motion.div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#07080b]" />}>
+      <LoginContent />
+    </Suspense>
   );
 }
