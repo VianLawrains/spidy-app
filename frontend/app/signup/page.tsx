@@ -4,33 +4,34 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Eye, EyeOff, Check, AlertCircle, ArrowRight } from 'lucide-react';
+import { Eye, EyeOff, AlertCircle, ArrowRight, ShieldCheck } from 'lucide-react';
 import { registerApi } from '../../lib/api';
 
 export default function SignupPage() {
   const router = useRouter();
-  // CRITICAL REQUIREMENT: Initial input states MUST be empty strings ""
+  
+  // CRITICAL REQUIREMENT: Initial form inputs MUST be empty string ""
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [shake, setShake] = useState(false);
+  const [isPasswordFocused, setIsPasswordFocused] = useState(false);
 
-  // Password Requirement Checks
+  // Live password strength criteria
   const hasMinLength = password.length >= 8;
   const hasUpper = /[A-Z]/.test(password);
   const hasLower = /[a-z]/.test(password);
   const hasNumber = /[0-9]/.test(password);
-  const hasSpecial = /[!@#$%^&*()_+\-=\[\]{}|;:,.<>?/]/.test(password);
-  const isPasswordStrong = hasMinLength && hasUpper && hasLower && hasNumber && hasSpecial;
-
-  // Confirm Password Check
-  const hasConfirmTyped = confirmPassword.length > 0;
-  const isConfirmMatching = hasConfirmTyped && password === confirmPassword;
+  const hasSpecial = /[^A-Za-z0-9]/.test(password);
+  
+  const isPasswordValid = hasMinLength && hasUpper && hasLower && hasNumber && hasSpecial;
 
   const triggerErrorShake = (msg: string) => {
     setError(msg);
@@ -40,56 +41,58 @@ export default function SignupPage() {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     setError(null);
 
     const cleanName = fullName.trim();
-    if (!/^[A-Za-z\s]+$/.test(cleanName)) {
-      triggerErrorShake('Name can contain letters and normal spaces only.');
+    const cleanEmail = email.trim().toLowerCase();
+
+    if (!cleanName) {
+      triggerErrorShake('Please enter your full name.');
       return;
     }
 
-    if (!isPasswordStrong) {
-      triggerErrorShake('Password does not meet all security requirements.');
+    if (!cleanEmail) {
+      triggerErrorShake('Please enter a valid email address.');
+      return;
+    }
+
+    if (!isPasswordValid) {
+      triggerErrorShake('Password does not meet the security requirements below.');
       return;
     }
 
     if (password !== confirmPassword) {
-      triggerErrorShake("Passwords don't match.");
+      triggerErrorShake('Passwords do not match.');
       return;
     }
 
     setLoading(true);
 
     try {
-      const cleanEmail = email.trim().toLowerCase();
       const res = await registerApi({
-        full_name: cleanName,
         email: cleanEmail,
-        password,
-        confirm_password: confirmPassword,
+        password: password,
+        full_name: cleanName,
       });
 
-      if (res.access_token) {
-        localStorage.setItem('spidy_token', res.access_token);
-        if (res.refresh_token) {
-          localStorage.setItem('spidy_refresh_token', res.refresh_token);
-        }
-        router.push('/');
-      } else if (res.status === 'pending_verification') {
-        router.push(`/verify-email?email=${encodeURIComponent(cleanEmail)}`);
+      if (res.status === 'success' || res.detail) {
+        // Store email for OTP verification step
+        localStorage.setItem('spidy_pending_verify_email', cleanEmail);
+        router.push('/verify-email');
       }
     } catch (err: any) {
       const detail = err.response?.data?.detail || err.message;
-      triggerErrorShake(typeof detail === 'string' ? detail : 'Unable to create account. Please try again.');
+      triggerErrorShake(typeof detail === 'string' ? detail : 'Failed to create account. Email may already be registered.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#07080b] text-white flex items-center justify-center p-4 relative overflow-hidden bg-spider-grid">
+    <div className="min-h-screen bg-[#07080b] text-white flex items-center justify-center p-4 relative overflow-hidden bg-spider-grid py-12">
       {/* Soft Ambient Red Glow */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[480px] h-[480px] bg-spidy-red/15 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[520px] h-[520px] bg-spidy-red/15 rounded-full blur-[130px] pointer-events-none" />
 
       <motion.div
         initial={{ opacity: 0, y: 30, scale: 0.95 }}
@@ -100,9 +103,9 @@ export default function SignupPage() {
           x: shake ? [-10, 10, -8, 8, -4, 4, 0] : 0,
         }}
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-        className="glass-panel p-8 rounded-3xl border border-spidy-border max-w-md w-full space-y-6 shadow-2xl relative z-10 my-6 backdrop-blur-xl bg-black/60"
+        className="glass-panel p-8 rounded-3xl border border-spidy-border max-w-md w-full space-y-6 shadow-2xl relative z-10 backdrop-blur-xl bg-black/60 my-auto"
       >
-        {/* Animated 3D Floating Spidy Avatar */}
+        {/* Header Branding */}
         <div className="text-center space-y-2">
           <motion.div
             animate={{ y: [-4, 4, -4] }}
@@ -117,7 +120,7 @@ export default function SignupPage() {
             />
           </motion.div>
           <h1 className="text-2xl font-extrabold tracking-tight text-white">Create your account</h1>
-          <p className="text-xs text-gray-400">Welcome to Spidy AI</p>
+          <p className="text-xs text-gray-400">Join Spidy AI Assistant.</p>
         </div>
 
         {/* Error Notification */}
@@ -127,17 +130,10 @@ export default function SignupPage() {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
-              className="p-3.5 rounded-xl bg-red-950/80 border border-red-800 text-xs text-red-300 flex items-center justify-between gap-2 overflow-hidden"
+              className="p-3.5 rounded-xl bg-red-950/80 border border-red-800 text-xs text-red-300 flex items-center gap-2 overflow-hidden"
             >
-              <div className="flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
-                <span>{error}</span>
-              </div>
-              {error.includes('sign in') && (
-                <Link href="/login" className="text-spidy-crimson underline font-semibold text-xs whitespace-nowrap">
-                  Sign in
-                </Link>
-              )}
+              <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+              <span>{error}</span>
             </motion.div>
           )}
         </AnimatePresence>
@@ -179,9 +175,11 @@ export default function SignupPage() {
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                onFocus={() => setIsPasswordFocused(true)}
+                onBlur={() => setIsPasswordFocused(false)}
                 required
                 autoComplete="new-password"
-                placeholder="Create a password"
+                placeholder="Create a strong password"
                 className="w-full glass-input pl-3.5 pr-10 py-2.5 rounded-xl text-xs focus:outline-none focus:border-spidy-red focus:ring-2 focus:ring-spidy-red/40 transition-all"
               />
               <button
@@ -194,17 +192,17 @@ export default function SignupPage() {
             </div>
           </div>
 
-          {/* Password Strength Checklist */}
-          {password.length > 0 && (
+          {/* Live Password Criteria Breakdown */}
+          {(isPasswordFocused || password.length > 0) && (
             <motion.div
-              initial={{ opacity: 0, y: -5 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="p-3 rounded-xl bg-spidy-surface/70 border border-spidy-border text-[11px] space-y-1.5"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              className="p-3 rounded-xl bg-black/40 border border-spidy-border space-y-1.5 overflow-hidden"
             >
-              {isPasswordStrong ? (
-                <div className="text-green-400 font-semibold flex items-center gap-1.5 text-xs">
-                  <Check className="w-4 h-4" />
-                  <span>✓ Strong password</span>
+              {isPasswordValid ? (
+                <div className="flex items-center gap-2 text-xs font-semibold text-green-400">
+                  <ShieldCheck className="w-4 h-4 text-green-400" />
+                  <span>Strong password criteria met!</span>
                 </div>
               ) : (
                 <>
@@ -254,17 +252,6 @@ export default function SignupPage() {
             </div>
           </div>
 
-          {/* Confirm Password Match Status */}
-          {hasConfirmTyped && (
-            <div className="text-[11px] font-medium pt-0.5">
-              {isConfirmMatching ? (
-                <span className="text-green-400 flex items-center gap-1">✓ Passwords match</span>
-              ) : (
-                <span className="text-red-400">Passwords don't match.</span>
-              )}
-            </div>
-          )}
-
           {/* Submit Button */}
           <motion.button
             whileHover={{ scale: 1.015 }}
@@ -297,7 +284,6 @@ export default function SignupPage() {
         {/* Continue with Google */}
         <button
           type="button"
-          onClick={() => alert("Google OAuth Integration: Configured for Google sign-in.")}
           className="w-full py-2.5 rounded-xl bg-spidy-surface border border-spidy-border hover:border-gray-500 text-xs text-gray-200 font-semibold flex items-center justify-center gap-2 transition-all"
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24">

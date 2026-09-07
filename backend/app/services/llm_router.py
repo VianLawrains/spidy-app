@@ -37,7 +37,7 @@ class LLMRouter:
         return ""
 
     def _get_gemini_client(self, api_key: str):
-        """Lazy-initialize and cache Google GenAI client with a 30-second HTTP timeout"""
+        """Lazy-initialize and cache Google GenAI client with a strict 12-second HTTP deadline to prevent high-latency stalls"""
         from google import genai
         from google.genai import types
 
@@ -45,7 +45,7 @@ class LLMRouter:
         if clean_key not in self._gemini_client_cache:
             self._gemini_client_cache[clean_key] = genai.Client(
                 api_key=clean_key,
-                http_options=types.HttpOptions(timeout=30000)
+                http_options=types.HttpOptions(timeout=12000)
             )
         return self._gemini_client_cache[clean_key]
 
@@ -89,9 +89,9 @@ class LLMRouter:
                     logger.warning(f"[Gemini Quota Exceeded]: {e}")
                     return user_msg
 
-                err_detail = f"❌ [Gemini API Error]: {str(e)}"
-                logger.error(f"{err_detail}\n{traceback.format_exc()}")
-                return f"I apologize, but I encountered a temporary issue reaching the Gemini AI service ({str(e)}). Please try sending your message again."
+                # Handle 504 Deadline Exceeded, timeouts, and transient exceptions cleanly without exposing raw Python tracebacks
+                logger.error(f"❌ [Gemini API Error/Timeout]: {str(e)}")
+                return "Spidy AI is temporarily unable to reach Gemini. Please try again."
 
         # 2. OpenAI Provider
         if "gpt" in model_name or "openai" in model_name:
@@ -139,37 +139,26 @@ class LLMRouter:
             yield chunk
 
     def _sync_gemini_call(self, user_prompt: str, system_prompt: str, api_key: str) -> str:
-        """Synchronous worker function to run in thread pool with controlled 1-retry fallback for 503/504"""
+        """Synchronous worker function executing single fast request with strict 12s deadline"""
         from google.genai import types
         
         client = self._get_gemini_client(api_key)
-        max_attempts = 2
-
-        for attempt in range(1, max_attempts + 1):
-            try:
-                res = client.models.generate_content(
-                    model=ACTIVE_GEMINI_MODEL,
-                    contents=user_prompt,
-                    config=types.GenerateContentConfig(
-                        system_instruction=system_prompt
-                    )
+        
+        try:
+            res = client.models.generate_content(
+                model=ACTIVE_GEMINI_MODEL,
+                contents=user_prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_prompt
                 )
-                if res and hasattr(res, 'text') and res.text:
-                    return res.text
-            except Exception as e:
-                err_str = str(e).lower()
-                # DO NOT retry 429 quota exhaustion errors!
-                if "429" in err_str or "resource_exhausted" in err_str or "quota" in err_str:
-                    raise e
+            )
+            if res and hasattr(res, 'text') and res.text:
+                return res.text
+        except Exception as e:
+            logger.warning(f"[Gemini Single Call Exception]: {e}")
+            raise e
 
-                is_transient = "504" in err_str or "503" in err_str or "deadline" in err_str or "unavailable" in err_str
-                if is_transient and attempt < max_attempts:
-                    logger.warning(f"[Gemini Retry] Attempt {attempt} failed ({e}), retrying once after 1s pause...")
-                    time.sleep(1.0)
-                    continue
-                raise e
-
-        raise RuntimeError("Gemini 3.6 Flash API returned an empty response.")
+        raise RuntimeError("Gemini API returned an empty response.")
 
     async def _call_gemini_genai_sdk(self, messages: List[Dict[str, str]], system_prompt: str, api_key: str) -> str:
         """Call Google GenAI SDK asynchronously via thread pool to maintain high event loop responsiveness"""

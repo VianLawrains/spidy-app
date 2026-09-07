@@ -189,7 +189,6 @@ export default function LoginPage() {
         {/* Continue with Google */}
         <button
           type="button"
-          onClick={() => alert("Google OAuth Integration: Configured for Google sign-in.")}
           className="w-full py-2.5 rounded-xl bg-spidy-surface border border-spidy-border hover:border-gray-500 text-xs text-gray-200 font-semibold flex items-center justify-center gap-2 transition-all"
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24">
