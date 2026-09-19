@@ -57,14 +57,31 @@ async def init_db():
                 except Exception as lock_err:
                     print(f"[DB INIT NOTICE] Advisory lock notice: {lock_err}")
 
-            # 2. Idempotent Table Creation (skips existing tables via checkfirst=True)
+            # 2. Idempotent Table Creation for all Base.metadata tables (skips existing tables via checkfirst=True)
             def safe_create_tables(sync_conn):
+                try:
+                    inspector = inspect(sync_conn)
+                    existing_tables = set(inspector.get_table_names())
+                    for table_name, table in Base.metadata.tables.items():
+                        if table_name not in existing_tables:
+                            try:
+                                table.create(sync_conn, checkfirst=True)
+                                print(f"[DB INIT SUCCESS] Created missing table '{table_name}'.")
+                            except Exception as table_err:
+                                err_str = str(table_err).lower()
+                                if "already exists" in err_str or "unique constraint" in err_str:
+                                    print(f"[DB INIT NOTICE] Table '{table_name}' already present.")
+                                else:
+                                    print(f"[DB INIT NOTICE] Creation notice for '{table_name}': {table_err}")
+                except Exception as insp_err:
+                    print(f"[DB INIT NOTICE] Inspector check notice: {insp_err}")
+
                 try:
                     Base.metadata.create_all(sync_conn, checkfirst=True)
                 except (exc.IntegrityError, exc.OperationalError, exc.ProgrammingError) as db_err:
                     err_str = str(db_err).lower()
                     if "already exists" in err_str or "unique constraint" in err_str or "typname" in err_str:
-                        print("[DB INIT NOTICE] Schema objects already exist in PostgreSQL.")
+                        print("[DB INIT NOTICE] Schema objects already exist in database.")
                     else:
                         print(f"[DB INIT NOTICE] Ignored non-critical creation notice: {db_err}")
 
